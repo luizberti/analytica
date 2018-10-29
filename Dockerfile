@@ -13,7 +13,7 @@ RUN apt update && apt install -y --no-install-recommends apt-utils && \
 
 # ANACONDA SETUP
 ENV PATH /opt/conda/bin:$PATH
-ADD https://repo.anaconda.com/archive/Anaconda3-5.2.0-Linux-x86_64.sh anaconda.sh
+ADD https://repo.anaconda.com/archive/Anaconda3-5.3.0-Linux-x86_64.sh anaconda.sh
 RUN echo '. /opt/conda/bin/activate' >> $HOME/.bashrc && \
     echo '. /opt/conda/bin/activate' >> $HOME/.bash_profile && \
     echo '. /opt/conda/bin/activate' >> $HOME/.profile && \
