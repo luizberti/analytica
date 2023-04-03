@@ -1,33 +1,55 @@
-FROM ubuntu:bionic
+ARG LANG=C.UTF-8 LC_ALL=C.UTF-8
+ARG ARCH=aarch64  
+
+
+FROM ubuntu:lunar AS builder
 USER root
+
+ARG ARCH
+ARG LANG
+ARG LC_ALL
+ARG DEBIAN_FRONTEND=noninteractive
+
 WORKDIR /root/
 
-ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
-ENV DEBIAN_FRONTEND noninteractive
 
 # SYSTEM PACKAGES
-RUN apt update && apt install -y --no-install-recommends apt-utils && \
-    apt install -y tzdata software-properties-common python3-software-properties \
-    wget curl bzip2 git gcc openssh-client build-essential jq entr \
-    tree htop vim parallel openjdk-8-jre
+RUN apt update
+RUN apt install -y sudo
+RUN apt install -y --no-install-recommends apt-utils
+RUN apt install -y --no-install-recommends tzdata software-properties-common \
+    zstd git openssh-client
 
-# ANACONDA SETUP
-ENV PATH /opt/conda/bin:$PATH
-ADD https://repo.anaconda.com/archive/Anaconda3-5.3.0-Linux-x86_64.sh anaconda.sh
-RUN echo '. /opt/conda/bin/activate' >> $HOME/.bashrc && \
-    echo '. /opt/conda/bin/activate' >> $HOME/.bash_profile && \
-    echo '. /opt/conda/bin/activate' >> $HOME/.profile && \
-    echo 'export PATH=/opt/conda/bin:$PATH' >> /etc/profile.d/conda.sh && \
-    bash anaconda.sh -b -p /opt/conda && \
-    rm anaconda.sh
+RUN apt install -y --no-install-recommends jq exa fish htop graphviz
 
-# PYTHON PACKAGES
-RUN conda config --add channels conda-forge
-RUN conda install -y graphviz python-graphviz s3transfer s3fs boto3 fastparquet pyspark \
-    python-snappy dill bokeh ujson spacy gensim holoviews pymysql && conda clean -tipsy
-RUN pip install retry uvloop pygsheets asyncpg records unidecode gtin_validator yurl \
-    oauth2client httpie bpython s4cmd
+# MICROMAMBA
+RUN curl -Ls https://micro.mamba.pm/api/micromamba/linux-$ARCH/latest | \
+    tar -xvj bin/micromamba && mv bin/micromamba /bin/ && rm -rf bin
 
-EXPOSE 80
-CMD ["jupyter", "lab", "--allow-root", "--no-browser", "-y", "--ip=0.0.0.0", "--port=80"]
+RUN echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
+RUN apt clean && rm -rf /var/lib/apt/lists/* /home
 
+
+FROM scratch AS final
+COPY --from=builder / /
+
+ARG LANG
+ENV LANG=$LANG
+ARG LC_ALL
+ENV LC_ALL=$LC_ALL
+
+RUN useradd --create-home --home-dir=/home --shell /bin/fish -g sudo deviant
+USER deviant
+WORKDIR /home
+
+ENTRYPOINT /bin/fish
+RUN sudo chmod -R a+rwx /opt /var
+ENV MAMBA_ROOT_PREFIX=/opt/mamba
+ENV MAMBA_ROOT_ENVIRONMENT=/var/opt/mamba
+RUN mkdir -p $MAMBA_ROOT_PREFIX $MAMBA_ROOT_ENVIRONMENT
+RUN micromamba shell init -s fish
+RUN micromamba activate
+
+EXPOSE 8080
+CMD fish
+#CMD ["jupyter", "lab", "--allow-root", "--no-browser", "-y", "--ip=0.0.0.0", "--port=8080"]
